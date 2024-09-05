@@ -15,24 +15,30 @@ function App() {
     releaseDate: "",
   });
 
+  const apiEndpoint =
+    "https://react-http-13ce3-default-rtdb.firebaseio.com/movies.json";
+
   const fetchMoviesHandler = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
-      const response = await fetch("https://swapi.dev/api/films/");
+      const response = await fetch(apiEndpoint);
       if (!response.ok) {
         throw new Error("Something went wrong ...Retrying");
       }
       const data = await response.json();
-      const transformedMovies = data.results.map((movieData) => {
-        return {
-          id: movieData.episode_id,
-          title: movieData.title,
-          openingText: movieData.opening_crawl,
-          releaseDate: movieData.release_date,
-        };
-      });
-      setMovies(transformedMovies);
+
+      const loadedMovies = [];
+      
+      for (const key in data) {
+        loadedMovies.push({
+          id: key,
+          title: data[key].title,
+          openingText: data[key].openingText,
+          releaseDate: data[key].releaseDate,
+        });
+      }
+      setMovies(loadedMovies);
       setRetrying(false); // Stop retrying if successful
     } catch (error) {
       setError(error.message || "Something went wrong ...Retrying");
@@ -68,6 +74,52 @@ function App() {
     setError("Retrying canceled by user");
   };
 
+  const handleFormChange = (e) => {
+    const { name, value } = e.target;
+    setNewMovie((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleAddMovie = async () => {
+    try {
+      const response = await fetch(apiEndpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(newMovie),
+      });
+      if (!response.ok) {
+        throw new Error("Failed to add movie");
+      }
+      const addedMovieData = await response.json();
+      const addedMovie = { ...newMovie, id: addedMovieData.name }; // Firebase returns the key in 'name'
+      setMovies((prev) => [...prev, addedMovie]); // Add new movie to the state
+    } catch (error) {
+      console.error(error);
+      setError("Failed to add movie");
+    } finally {
+      setNewMovie({ title: "", openingText: "", releaseDate: "" });
+    }
+  };
+
+  const handleDeleteMovie = async (id) => {
+    try {
+      const response = await fetch(
+        `https://react-http-13ce3-default-rtdb.firebaseio.com/movies/${id}.json`,
+        {
+          method: "DELETE",
+        }
+      );
+      if (!response.ok) {
+        throw new Error("Failed to delete movie");
+      }
+      setMovies((prev) => prev.filter((movie) => movie.id !== id)); // Correct filtering
+    } catch (error) {
+      console.error(error);
+      setError("Failed to delete movie");
+    }
+  };
+
   let content = <p>Found no movies</p>;
 
   if (error) {
@@ -80,19 +132,8 @@ function App() {
   } else if (isLoading) {
     content = <p>Loading...</p>;
   } else if (movies.length > 0) {
-    content = <MoviesList movies={movies} />;
+    content = <MoviesList movies={movies} onDeleteMovie={handleDeleteMovie} />;
   }
-
-  const handleFormChange = (e) => {
-    const { name, value } = e.target;
-    setNewMovie((prev) => ({ ...prev, id: Math.random().toString() }));
-    setNewMovie((prev) => ({ ...prev, [name]: value }));
-  };
-  const handleAddMovie = () => {
-    console.log(newMovie);
-    setNewMovie({ title: "", openingText: "", releaseDate: "" });
-    setMovies((prev) => [...prev, newMovie]);
-  };
 
   return (
     <React.Fragment>
